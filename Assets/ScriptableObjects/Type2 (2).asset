@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2a587ca8e893a1c489975c9376a2ef22, type: 3}
-  m_Name: Type2
+  m_Name: Type2 (2)
   m_EditorClassIdentifier: 
-  TestString: abc
-  TestShader: {fileID: 0}
-  TestMaterial: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
+  TestString: 123
+  TestShader: {fileID: 10101, guid: 0000000000000000e000000000000000, type: 0}
+  TestMaterial: {fileID: 10756, guid: 0000000000000000e000000000000000, type: 0}
   TestCamera: {fileID: 0}
-  TestColor: {r: 0.04673934, g: 1, b: 0, a: 0}
+  TestColor: {r: 0.9685534, g: 0, b: 0, a: 0}

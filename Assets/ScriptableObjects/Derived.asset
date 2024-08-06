@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12179eafab785944788b73a9170106a2, type: 3}
   m_Name: Derived
   m_EditorClassIdentifier: 
-  Abstract: Abstract
+  Abstract: Abstract3
   FloatSerializedField: 0
   FloatPublicField: 0
   Integer: 0
-  Color: {r: 0, g: 0, b: 0, a: 0}
+  Color: {r: 0.93710685, g: 0.8634349, b: 0.8634349, a: 0}
   DoubleField: 0
   StringField: 
   GameObjectField: {fileID: 0}

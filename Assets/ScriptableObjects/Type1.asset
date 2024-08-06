@@ -16,7 +16,7 @@ MonoBehaviour:
   FloatSerializedField: 0
   FloatPublicField: 0
   Integer: 0
-  Color: {r: 0, g: 0, b: 0, a: 0}
+  Color: {r: 0, g: 0.033776283, b: 1, a: 0}
   DoubleField: 0
   StringField: 
-  GameObjectField: {fileID: 0}
+  GameObjectField: {fileID: 6258451061515666304, guid: 63667fabdc3132c48933a363fce135c6, type: 3}

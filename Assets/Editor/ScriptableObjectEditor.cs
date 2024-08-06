@@ -8,18 +8,19 @@ using System.Reflection;
 public class ScriptableObjectEditorWindow : EditorWindow
 {
     private Vector2 scrollPosition;
-    private List<Type> scriptableObjectTypes;
+    public List<Type> scriptableObjectTypes;
     private string[] typeNames;
-    private int selectedTypeIndex = 0;
+    public int selectedTypeIndex = 0;
 
     private List<ScriptableObject> currentTypeObjects = new List<ScriptableObject>();
-    private string assetsFolderPath = "Assets/MyGameAssets";
+    private string assetsFolderPath = "Assets/ScriptableObjects";
 
     private List<Assembly> availableAssemblies;
     private string[] assemblyNames;
     private int selectedAssemblyIndex = 0;
 
     private bool includeDerivedTypes = true;
+    private DateTime lastAssemblyCheckTime = DateTime.Now;
 
     [MenuItem("SH Tools/Scriptable Object Editor")]
     public static void ShowWindow()
@@ -31,16 +32,51 @@ public class ScriptableObjectEditorWindow : EditorWindow
     {
         LoadAvailableAssemblies();
         LoadScriptableObjectTypes();
+        EditorApplication.update += OnEditorUpdate;
+    }
+
+    private void OnDisable()
+    {
+        EditorApplication.update -= OnEditorUpdate;
+    }
+
+    private void OnEditorUpdate()
+    {
+        // Check for new assemblies periodically
+        if ((DateTime.Now - lastAssemblyCheckTime).TotalSeconds > 5)
+        {
+            RefreshAssembliesIfChanged();
+            lastAssemblyCheckTime = DateTime.Now;
+        }
+    }
+
+    private void RefreshAssembliesIfChanged()
+    {
+        // Check if assemblies have changed
+        var currentAssemblies = GetAssembliesWithScriptableObjects();
+
+        if (!currentAssemblies.SequenceEqual(availableAssemblies))
+        {
+            LoadAvailableAssemblies();
+            LoadScriptableObjectTypes();
+            LoadObjectsOfType(scriptableObjectTypes.FirstOrDefault());
+        }
     }
 
     private void LoadAvailableAssemblies()
     {
-        availableAssemblies = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(assembly => !assembly.FullName.StartsWith("UnityEngine") && !assembly.FullName.StartsWith("UnityEditor") && !assembly.FullName.StartsWith("Unity."))
-            .OrderBy(assembly => assembly.GetName().Name)
-            .ToList();
+        availableAssemblies = GetAssembliesWithScriptableObjects();
 
         assemblyNames = availableAssemblies.Select(assembly => assembly.GetName().Name).Prepend("All Assemblies").ToArray();
+    }
+
+    private static List<Assembly> GetAssembliesWithScriptableObjects()
+    {
+        return AppDomain.CurrentDomain.GetAssemblies()
+            .Where(assembly => !assembly.FullName.StartsWith("UnityEngine") && !assembly.FullName.StartsWith("UnityEditor") && !assembly.FullName.StartsWith("Unity."))
+            .Where(assembly => assembly.GetTypes().Any(type => type.IsSubclassOf(typeof(ScriptableObject)) && !type.IsAbstract))
+            .OrderBy(assembly => assembly.GetName().Name)
+            .ToList();
     }
 
     private void LoadScriptableObjectTypes()
@@ -70,8 +106,14 @@ public class ScriptableObjectEditorWindow : EditorWindow
         return guids.Any();
     }
 
-    private void LoadObjectsOfType(Type type)
+    public void LoadObjectsOfType(Type type)
     {
+        if (type == null)
+        {
+            currentTypeObjects.Clear();
+            return;
+        }
+
         currentTypeObjects.Clear();
 
         string[] guids = AssetDatabase.FindAssets("t:ScriptableObject", new[] { assetsFolderPath });
@@ -117,15 +159,29 @@ public class ScriptableObjectEditorWindow : EditorWindow
             selectedAssemblyIndex = newAssemblyIndex;
             LoadScriptableObjectTypes();
             selectedTypeIndex = 0;
-            currentTypeObjects.Clear(); // Clear objects when changing assembly
+            LoadObjectsOfType(scriptableObjectTypes.FirstOrDefault());
         }
+
+        // Add a button to refresh assemblies manually
+        if (GUILayout.Button("Refresh Assemblies", GUILayout.Width(150)))
+        {
+            LoadAvailableAssemblies();
+            LoadScriptableObjectTypes();
+            LoadObjectsOfType(scriptableObjectTypes.FirstOrDefault());
+        }
+
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space();
 
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField("Type", GUILayout.Width(40));
-        selectedTypeIndex = EditorGUILayout.Popup(selectedTypeIndex, typeNames, GUILayout.Width(200));
+        int newSelectedTypeIndex = EditorGUILayout.Popup(selectedTypeIndex, typeNames, GUILayout.Width(200));
+        if (newSelectedTypeIndex != selectedTypeIndex)
+        {
+            selectedTypeIndex = newSelectedTypeIndex;
+            LoadObjectsOfType(scriptableObjectTypes[selectedTypeIndex]);
+        }
 
         bool newIncludeDerivedTypes = EditorGUILayout.ToggleLeft("Include Derived", includeDerivedTypes, GUILayout.Width(120));
         if (newIncludeDerivedTypes != includeDerivedTypes)
@@ -138,6 +194,7 @@ public class ScriptableObjectEditorWindow : EditorWindow
         {
             LoadObjectsOfType(scriptableObjectTypes[selectedTypeIndex]);
         }
+
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space();
@@ -147,11 +204,7 @@ public class ScriptableObjectEditorWindow : EditorWindow
             EditorGUILayout.LabelField($"Editing {typeNames[selectedTypeIndex]} Instances", EditorStyles.boldLabel);
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
-            foreach (ScriptableObject obj in currentTypeObjects)
-            {
-                DrawObjectProperties(obj);
-                EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
-            }
+            DrawPropertiesGrid();
 
             EditorGUILayout.EndScrollView();
         }
@@ -159,24 +212,67 @@ public class ScriptableObjectEditorWindow : EditorWindow
         EditorGUILayout.EndVertical();
     }
 
-    private void DrawObjectProperties(ScriptableObject obj)
+    private void DrawPropertiesGrid()
     {
-        SerializedObject serializedObject = new SerializedObject(obj);
+        if (currentTypeObjects.Count == 0)
+            return;
+
+        SerializedObject serializedObject = new SerializedObject(currentTypeObjects[0]);
         SerializedProperty property = serializedObject.GetIterator();
 
+        // Draw property names as headers
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField(obj.name, EditorStyles.boldLabel, GUILayout.Width(150));
+        EditorGUILayout.LabelField("Instance Name", EditorStyles.boldLabel, GUILayout.Width(150));
+        property.NextVisible(true); // Skip the script reference
 
-        property.NextVisible(true);
+        List<string> propertyNames = new List<string>();
+        List<float> columnWidths = new List<float>();
+
         while (property.NextVisible(false))
         {
-            EditorGUILayout.BeginVertical(GUILayout.Width(150));
-            EditorGUILayout.LabelField(property.displayName, GUILayout.Width(150));
-            EditorGUILayout.PropertyField(property, GUIContent.none, GUILayout.Width(150));
-            EditorGUILayout.EndVertical();
+            propertyNames.Add(property.displayName);
+            columnWidths.Add(Mathf.Max(100, property.displayName.Length * 10));
+            EditorGUILayout.LabelField(property.displayName, EditorStyles.boldLabel, GUILayout.Width(columnWidths.Last()));
         }
-
-        serializedObject.ApplyModifiedProperties();
         EditorGUILayout.EndHorizontal();
+
+        // Draw properties for each instance
+        foreach (ScriptableObject obj in currentTypeObjects)
+        {
+            serializedObject = new SerializedObject(obj);
+            property = serializedObject.GetIterator();
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(obj.name, GUILayout.Width(150));
+
+            property.NextVisible(true); // Skip the script reference
+
+            int columnIndex = 0;
+            while (property.NextVisible(false))
+            {
+                EditorGUILayout.PropertyField(property, GUIContent.none, GUILayout.Width(columnWidths[columnIndex]));
+                columnIndex++;
+            }
+
+            serializedObject.ApplyModifiedProperties();
+            EditorGUILayout.EndHorizontal();
+        }
+    }
+}
+
+public class ScriptableObjectPostprocessor : AssetPostprocessor
+{
+    static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
+    {
+        // If any ScriptableObject assets are imported, deleted, or moved, refresh the editor window
+        bool refreshNeeded = importedAssets.Concat(deletedAssets).Concat(movedAssets).Any(assetPath => assetPath.EndsWith(".asset"));
+        if (refreshNeeded)
+        {
+            var windows = Resources.FindObjectsOfTypeAll<ScriptableObjectEditorWindow>();
+            foreach (var window in windows)
+            {
+                window.LoadObjectsOfType(window.scriptableObjectTypes[window.selectedTypeIndex]);
+            }
+        }
     }
 }
