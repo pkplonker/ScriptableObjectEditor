@@ -42,7 +42,6 @@ public class ScriptableObjectEditorWindow : EditorWindow
 
     private void OnEditorUpdate()
     {
-        // Check for new assemblies periodically
         if ((DateTime.Now - lastAssemblyCheckTime).TotalSeconds > 5)
         {
             RefreshAssembliesIfChanged();
@@ -52,7 +51,6 @@ public class ScriptableObjectEditorWindow : EditorWindow
 
     private void RefreshAssembliesIfChanged()
     {
-        // Check if assemblies have changed
         var currentAssemblies = GetAssembliesWithScriptableObjects();
 
         if (!currentAssemblies.SequenceEqual(availableAssemblies))
@@ -144,7 +142,7 @@ public class ScriptableObjectEditorWindow : EditorWindow
 
     private void OnGUI()
     {
-        EditorGUILayout.BeginVertical();
+        EditorGUILayout.BeginVertical("box");
 
         EditorGUILayout.LabelField("Asset Management", EditorStyles.boldLabel);
 
@@ -162,7 +160,6 @@ public class ScriptableObjectEditorWindow : EditorWindow
             LoadObjectsOfType(scriptableObjectTypes.FirstOrDefault());
         }
 
-        // Add a button to refresh assemblies manually
         if (GUILayout.Button("Refresh Assemblies", GUILayout.Width(150)))
         {
             LoadAvailableAssemblies();
@@ -202,7 +199,7 @@ public class ScriptableObjectEditorWindow : EditorWindow
         if (currentTypeObjects.Count > 0)
         {
             EditorGUILayout.LabelField($"Editing {typeNames[selectedTypeIndex]} Instances", EditorStyles.boldLabel);
-            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(300));
 
             DrawPropertiesGrid();
 
@@ -220,10 +217,9 @@ public class ScriptableObjectEditorWindow : EditorWindow
         SerializedObject serializedObject = new SerializedObject(currentTypeObjects[0]);
         SerializedProperty property = serializedObject.GetIterator();
 
-        // Draw property names as headers
-        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.BeginHorizontal("box");
         EditorGUILayout.LabelField("Instance Name", EditorStyles.boldLabel, GUILayout.Width(150));
-        property.NextVisible(true); // Skip the script reference
+        property.NextVisible(true); 
 
         List<string> propertyNames = new List<string>();
         List<float> columnWidths = new List<float>();
@@ -236,16 +232,15 @@ public class ScriptableObjectEditorWindow : EditorWindow
         }
         EditorGUILayout.EndHorizontal();
 
-        // Draw properties for each instance
         foreach (ScriptableObject obj in currentTypeObjects)
         {
             serializedObject = new SerializedObject(obj);
             property = serializedObject.GetIterator();
 
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(obj.name, GUILayout.Width(150));
+            EditorGUILayout.BeginHorizontal("box");
+            EditorGUILayout.LabelField(obj.name, EditorStyles.textField, GUILayout.Width(150));
 
-            property.NextVisible(true); // Skip the script reference
+            property.NextVisible(true);
 
             int columnIndex = 0;
             while (property.NextVisible(false))
@@ -264,7 +259,6 @@ public class ScriptableObjectPostprocessor : AssetPostprocessor
 {
     static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
     {
-        // If any ScriptableObject assets are imported, deleted, or moved, refresh the editor window
         bool refreshNeeded = importedAssets.Concat(deletedAssets).Concat(movedAssets).Any(assetPath => assetPath.EndsWith(".asset"));
         if (refreshNeeded)
         {
