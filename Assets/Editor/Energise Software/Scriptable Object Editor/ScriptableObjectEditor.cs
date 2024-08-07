@@ -182,6 +182,18 @@ namespace ScriptableObjectEditor
 						EditorGUILayout.LabelField("Path", GUILayout.Width(40));
 						assetsFolderPath = EditorGUILayout.TextField(assetsFolderPath, GUILayout.Width(200));
 
+						if (GUILayout.Button("Browse", GUILayout.Width(80)))
+						{
+							string selectedPath = EditorUtility.OpenFolderPanel("Select Scriptable Object Folder",
+								assetsFolderPath, "");
+							if (!string.IsNullOrEmpty(selectedPath))
+							{
+								assetsFolderPath = selectedPath.Replace(Application.dataPath, "Assets");
+								LoadScriptableObjectTypes();
+								LoadObjectsOfType(scriptableObjectTypes.FirstOrDefault());
+							}
+						}
+
 						EditorGUILayout.LabelField("Assembly", GUILayout.Width(60));
 						var newAssemblyIndex =
 							EditorGUILayout.Popup(selectedAssemblyIndex, assemblyNames, GUILayout.Width(200));
@@ -257,6 +269,7 @@ namespace ScriptableObjectEditor
 			var property = serializedObject.GetIterator();
 
 			EditorGUILayout.BeginHorizontal("box");
+			EditorGUILayout.LabelField("Actions", EditorStyles.boldLabel, GUILayout.Width(60));
 			EditorGUILayout.LabelField("Instance Name", EditorStyles.boldLabel, GUILayout.Width(150));
 			property.NextVisible(true);
 
@@ -271,27 +284,78 @@ namespace ScriptableObjectEditor
 
 			EditorGUILayout.EndHorizontal();
 
-			foreach (var obj in currentTypeObjects)
+			for (int i = 0; i < currentTypeObjects.Count; i++)
 			{
+				var obj = currentTypeObjects[i];
 				serializedObject = new SerializedObject(obj);
 				property = serializedObject.GetIterator();
 
 				EditorGUILayout.BeginHorizontal("box");
-				EditorGUILayout.LabelField(obj.name, EditorStyles.textField, GUILayout.Width(150));
 
-				property.NextVisible(true);
-
-				var columnIndex = 0;
-				while (property.NextVisible(false))
+				if (GUILayout.Button(EditorGUIUtility.IconContent("d_Toolbar Plus"), GUILayout.Width(30),
+					    GUILayout.Height(18)))
 				{
-					EditorGUILayout.PropertyField(property, GUIContent.none,
-						GUILayout.Width(columnWidths[columnIndex]));
-					columnIndex++;
+					var assetPath = AssetDatabase.GetAssetPath(obj);
+					if (TryGetUniqueAssetPath(assetPath, obj.name, out var newAssetPath))
+					{
+						var newObj = Instantiate(obj);
+						AssetDatabase.CreateAsset(newObj, newAssetPath);
+						AssetDatabase.SaveAssets();
+					}
 				}
 
-				serializedObject.ApplyModifiedProperties();
+				if (GUILayout.Button(EditorGUIUtility.IconContent("d_TreeEditor.Trash"), GUILayout.Width(30),
+					    GUILayout.Height(18)))
+				{
+					var assetPath = AssetDatabase.GetAssetPath(obj);
+					AssetDatabase.DeleteAsset(assetPath);
+					i--;
+					AssetDatabase.SaveAssets();
+				}
+				else
+				{
+					EditorGUILayout.LabelField(obj.name, EditorStyles.textField, GUILayout.Width(150));
+
+					property.NextVisible(true);
+
+					var columnIndex = 0;
+					while (property.NextVisible(false))
+					{
+						EditorGUILayout.PropertyField(property, GUIContent.none,
+							GUILayout.Width(columnWidths[columnIndex]));
+						columnIndex++;
+					}
+
+					serializedObject.ApplyModifiedProperties();
+				}
+
+				
 				EditorGUILayout.EndHorizontal();
 			}
+		}
+
+		private bool TryGetUniqueAssetPath(string originalPath, string originalName, out string newPath)
+		{
+			newPath = string.Empty;
+			try
+			{
+				var directory = System.IO.Path.GetDirectoryName(originalPath);
+				var extension = System.IO.Path.GetExtension(originalPath);
+
+				var copyIndex = 1;
+				do
+				{
+					var newFileName = $"{originalName}_Copy{copyIndex}";
+					newPath = System.IO.Path.Combine(directory, $"{newFileName}{extension}");
+					copyIndex++;
+				} while (System.IO.File.Exists(newPath));
+			}
+			catch (Exception e)
+			{
+				return false;
+			}
+
+			return true;
 		}
 
 		/// <summary>
