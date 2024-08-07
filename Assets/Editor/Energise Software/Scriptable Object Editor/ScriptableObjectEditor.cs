@@ -10,11 +10,11 @@ namespace ScriptableObjectEditor
 	public class ScriptableObjectEditorWindow : EditorWindow
 	{
 		private Vector2 scrollPosition;
-		public List<Type> scriptableObjectTypes;
+		private List<Type> scriptableObjectTypes;
 		private string[] typeNames;
-		public int selectedTypeIndex;
+		private int selectedTypeIndex;
 
-		private List<ScriptableObject> currentTypeObjects = new();
+		private readonly List<ScriptableObject> currentTypeObjects = new();
 		private static string assetsFolderPath = "Assets/ScriptableObjects";
 
 		private List<Assembly> availableAssemblies;
@@ -25,10 +25,7 @@ namespace ScriptableObjectEditor
 		private DateTime lastAssemblyCheckTime = DateTime.Now;
 
 		[MenuItem("Window/Scriptable Object Editor &%S")]
-		public static void ShowWindow()
-		{
-			GetWindow<ScriptableObjectEditorWindow>("Scriptable Object Editor");
-		}
+		public static void ShowWindow() => GetWindow<ScriptableObjectEditorWindow>("Scriptable Object Editor");
 
 		private void OnEnable()
 		{
@@ -42,6 +39,9 @@ namespace ScriptableObjectEditor
 			EditorApplication.update -= OnEditorUpdate;
 		}
 
+		/// <summary>
+		/// Used in the callback of EditorApplication.Update to potentially check for new loaded assemblies
+		/// </summary>
 		private void OnEditorUpdate()
 		{
 			if ((DateTime.Now - lastAssemblyCheckTime).TotalSeconds > 5)
@@ -51,6 +51,9 @@ namespace ScriptableObjectEditor
 			}
 		}
 
+		/// <summary>
+		/// Reloads everything if the assemblies have changed
+		/// </summary>
 		private void RefreshAssembliesIfChanged()
 		{
 			var currentAssemblies = GetAssembliesWithScriptableObjects();
@@ -63,6 +66,9 @@ namespace ScriptableObjectEditor
 			}
 		}
 
+		/// <summary>
+		/// Reloads the assemblies
+		/// </summary>
 		private void LoadAvailableAssemblies()
 		{
 			availableAssemblies = GetAssembliesWithScriptableObjects();
@@ -73,6 +79,10 @@ namespace ScriptableObjectEditor
 				.ToArray();
 		}
 
+		/// <summary>
+		/// Gets all assemblies containing a scriptable object
+		/// </summary>
+		/// <returns>The collection of assemblies</returns>
 		private static List<Assembly> GetAssembliesWithScriptableObjects()
 		{
 			return AppDomain.CurrentDomain.GetAssemblies()
@@ -86,7 +96,10 @@ namespace ScriptableObjectEditor
 				.OrderBy(assembly => assembly.GetName().Name)
 				.ToList();
 		}
-		
+
+		/// <summary>
+		/// Gets all the types derived from <see cref="scriptableObjectTypes"/>
+		/// </summary>
 		private void LoadScriptableObjectTypes()
 		{
 			IEnumerable<Type> types;
@@ -101,7 +114,8 @@ namespace ScriptableObjectEditor
 			}
 
 			scriptableObjectTypes = types
-				.Where(type => type.IsSubclassOf(typeof(ScriptableObject)) && !type.IsAbstract && IsInAssetsFolder(type))
+				.Where(type =>
+					type.IsSubclassOf(typeof(ScriptableObject)) && !type.IsAbstract && IsInAssetsFolder(type))
 				.OrderBy(type => type.Name)
 				.ToList();
 
@@ -110,11 +124,15 @@ namespace ScriptableObjectEditor
 
 		private static bool IsInAssetsFolder(Type type)
 		{
-			string[] guids = AssetDatabase.FindAssets($"t:{type.Name}", new[] {assetsFolderPath});
+			var guids = AssetDatabase.FindAssets($"t:{type.Name}", new[] {assetsFolderPath});
 			return guids.Any();
 		}
 
-		public void LoadObjectsOfType(Type type)
+		/// <summary>
+		/// Adds to "currentTypeObjects"/> all objects of the provided type
+		/// </summary>
+		/// <param name="type">The type to load</param>
+		private void LoadObjectsOfType(Type type)
 		{
 			if (type == null)
 			{
@@ -124,32 +142,33 @@ namespace ScriptableObjectEditor
 
 			currentTypeObjects.Clear();
 
-			string[] guids = AssetDatabase.FindAssets("t:ScriptableObject", new[] {assetsFolderPath});
-			foreach (string guid in guids)
+			var guids = AssetDatabase.FindAssets("t:ScriptableObject", new[] {assetsFolderPath});
+			foreach (var guid in guids)
 			{
-				string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-				ScriptableObject obj = AssetDatabase.LoadAssetAtPath<ScriptableObject>(assetPath);
+				var assetPath = AssetDatabase.GUIDToAssetPath(guid);
+				var obj = AssetDatabase.LoadAssetAtPath<ScriptableObject>(assetPath);
 
-				if (obj != null)
+				if (obj == null) continue;
+				if (includeDerivedTypes)
 				{
-					if (includeDerivedTypes)
+					if (type.IsAssignableFrom(obj.GetType()))
 					{
-						if (type.IsAssignableFrom(obj.GetType()))
-						{
-							currentTypeObjects.Add(obj);
-						}
+						currentTypeObjects.Add(obj);
 					}
-					else
+				}
+				else
+				{
+					if (obj.GetType() == type)
 					{
-						if (obj.GetType() == type)
-						{
-							currentTypeObjects.Add(obj);
-						}
+						currentTypeObjects.Add(obj);
 					}
 				}
 			}
 		}
 
+		/// <summary>
+		/// Updates the UI
+		/// </summary>
 		private void OnGUI()
 		{
 			scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
@@ -164,7 +183,7 @@ namespace ScriptableObjectEditor
 						assetsFolderPath = EditorGUILayout.TextField(assetsFolderPath, GUILayout.Width(200));
 
 						EditorGUILayout.LabelField("Assembly", GUILayout.Width(60));
-						int newAssemblyIndex =
+						var newAssemblyIndex =
 							EditorGUILayout.Popup(selectedAssemblyIndex, assemblyNames, GUILayout.Width(200));
 						if (newAssemblyIndex != selectedAssemblyIndex)
 						{
@@ -188,7 +207,7 @@ namespace ScriptableObjectEditor
 					EditorGUILayout.BeginHorizontal();
 					{
 						EditorGUILayout.LabelField("Type", GUILayout.Width(40));
-						int newSelectedTypeIndex =
+						var newSelectedTypeIndex =
 							EditorGUILayout.Popup(selectedTypeIndex, typeNames, GUILayout.Width(200));
 						if (newSelectedTypeIndex != selectedTypeIndex)
 						{
@@ -196,7 +215,7 @@ namespace ScriptableObjectEditor
 							LoadObjectsOfType(scriptableObjectTypes[selectedTypeIndex]);
 						}
 
-						bool newIncludeDerivedTypes =
+						var newIncludeDerivedTypes =
 							EditorGUILayout.ToggleLeft("Include Derived", includeDerivedTypes, GUILayout.Width(120));
 						if (newIncludeDerivedTypes != includeDerivedTypes)
 						{
@@ -234,14 +253,14 @@ namespace ScriptableObjectEditor
 			if (currentTypeObjects.Count == 0)
 				return;
 
-			SerializedObject serializedObject = new SerializedObject(currentTypeObjects[0]);
-			SerializedProperty property = serializedObject.GetIterator();
+			var serializedObject = new SerializedObject(currentTypeObjects[0]);
+			var property = serializedObject.GetIterator();
 
 			EditorGUILayout.BeginHorizontal("box");
 			EditorGUILayout.LabelField("Instance Name", EditorStyles.boldLabel, GUILayout.Width(150));
 			property.NextVisible(true);
 
-			List<float> columnWidths = new List<float>();
+			var columnWidths = new List<float>();
 
 			while (property.NextVisible(false))
 			{
@@ -252,9 +271,8 @@ namespace ScriptableObjectEditor
 
 			EditorGUILayout.EndHorizontal();
 
-			for (int i = 0; i < currentTypeObjects.Count; i++)
+			foreach (var obj in currentTypeObjects)
 			{
-				ScriptableObject obj = currentTypeObjects[i];
 				serializedObject = new SerializedObject(obj);
 				property = serializedObject.GetIterator();
 
@@ -263,10 +281,11 @@ namespace ScriptableObjectEditor
 
 				property.NextVisible(true);
 
-				int columnIndex = 0;
+				var columnIndex = 0;
 				while (property.NextVisible(false))
 				{
-					EditorGUILayout.PropertyField(property, GUIContent.none, GUILayout.Width(columnWidths[columnIndex]));
+					EditorGUILayout.PropertyField(property, GUIContent.none,
+						GUILayout.Width(columnWidths[columnIndex]));
 					columnIndex++;
 				}
 
@@ -274,23 +293,33 @@ namespace ScriptableObjectEditor
 				EditorGUILayout.EndHorizontal();
 			}
 		}
-	}
 
-	public class ScriptableObjectPostprocessor : AssetPostprocessor
-	{
-		static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets,
-			string[] movedFromAssetPaths)
+		/// <summary>
+		/// Handles updating of asset types when assets are loaded
+		/// </summary>
+		public class ScriptableObjectPostprocessor : AssetPostprocessor
 		{
-			bool refreshNeeded = importedAssets
-				.Concat(deletedAssets)
-				.Concat(movedAssets)
-				.Any(assetPath => assetPath.EndsWith(".asset"));
-			if (refreshNeeded)
+			/// <summary>
+			/// Callback for when assets are updated
+			/// </summary>
+			/// <param name="importedAssets">The new assets</param>
+			/// <param name="deletedAssets">The deleted assets</param>
+			/// <param name="movedAssets">The moved assets</param>
+			/// <param name="movedFromAssetPaths">The moved from assets path</param>
+			static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets,
+				string[] movedFromAssetPaths)
 			{
-				var windows = Resources.FindObjectsOfTypeAll<ScriptableObjectEditorWindow>();
-				foreach (var window in windows)
+				bool refreshNeeded = importedAssets
+					.Concat(deletedAssets)
+					.Concat(movedAssets)
+					.Any(assetPath => assetPath.EndsWith(".asset"));
+				if (refreshNeeded)
 				{
-					window.LoadObjectsOfType(window.scriptableObjectTypes[window.selectedTypeIndex]);
+					var windows = Resources.FindObjectsOfTypeAll<ScriptableObjectEditorWindow>();
+					foreach (var window in windows)
+					{
+						window.LoadObjectsOfType(window.scriptableObjectTypes[window.selectedTypeIndex]);
+					}
 				}
 			}
 		}
