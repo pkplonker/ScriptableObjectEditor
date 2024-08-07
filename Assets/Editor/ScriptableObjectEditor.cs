@@ -79,19 +79,12 @@ public class ScriptableObjectEditorWindow : EditorWindow
 				!assembly.FullName.StartsWith("UnityEditor") &&
 				!assembly.FullName.StartsWith("Unity."))
 			.Where(assembly =>
-				assembly.GetTypes().Any(type => type.IsSubclassOf(typeof(ScriptableObject)) && !type.IsAbstract && IsInAssetsFolder(type)))
-			.Where(assembly => IsUserAssembly(assembly))
+				assembly.GetTypes().Any(type =>
+					type.IsSubclassOf(typeof(ScriptableObject)) && !type.IsAbstract && IsInAssetsFolder(type)))
 			.OrderBy(assembly => assembly.GetName().Name)
 			.ToList();
 	}
-
-	private static bool IsUserAssembly(Assembly assembly)
-	{
-		// Filter by project path or specific naming convention for user assemblies
-		var a = assembly;
-		return true;
-	}
-
+	
 	private void LoadScriptableObjectTypes()
 	{
 		IEnumerable<Type> types;
@@ -157,77 +150,81 @@ public class ScriptableObjectEditorWindow : EditorWindow
 
 	private void OnGUI()
 	{
-		scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Width(position.width), GUILayout.Height(position.height));
-		EditorGUILayout.BeginVertical("box");
-
-		EditorGUILayout.LabelField("Asset Management", EditorStyles.boldLabel);
-
-		EditorGUILayout.BeginHorizontal();
-		EditorGUILayout.LabelField("Path", GUILayout.Width(40));
-		assetsFolderPath = EditorGUILayout.TextField(assetsFolderPath, GUILayout.Width(200));
-
-		EditorGUILayout.LabelField("Assembly", GUILayout.Width(60));
-		int newAssemblyIndex = EditorGUILayout.Popup(selectedAssemblyIndex, assemblyNames, GUILayout.Width(200));
-		if (newAssemblyIndex != selectedAssemblyIndex)
+		scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 		{
-			selectedAssemblyIndex = newAssemblyIndex;
-			LoadScriptableObjectTypes();
-			selectedTypeIndex = 0;
-			LoadObjectsOfType(scriptableObjectTypes.FirstOrDefault());
+			EditorGUILayout.BeginVertical("box");
+			{
+				EditorGUILayout.LabelField("Asset Management", EditorStyles.boldLabel);
+
+				EditorGUILayout.BeginHorizontal();
+				{
+					EditorGUILayout.LabelField("Path", GUILayout.Width(40));
+					assetsFolderPath = EditorGUILayout.TextField(assetsFolderPath, GUILayout.Width(200));
+
+					EditorGUILayout.LabelField("Assembly", GUILayout.Width(60));
+					int newAssemblyIndex =
+						EditorGUILayout.Popup(selectedAssemblyIndex, assemblyNames, GUILayout.Width(200));
+					if (newAssemblyIndex != selectedAssemblyIndex)
+					{
+						selectedAssemblyIndex = newAssemblyIndex;
+						LoadScriptableObjectTypes();
+						selectedTypeIndex = 0;
+						LoadObjectsOfType(scriptableObjectTypes.FirstOrDefault());
+					}
+
+					if (GUILayout.Button("Refresh Assemblies", GUILayout.Width(150)))
+					{
+						LoadAvailableAssemblies();
+						LoadScriptableObjectTypes();
+						LoadObjectsOfType(scriptableObjectTypes.FirstOrDefault());
+					}
+				}
+				EditorGUILayout.EndHorizontal();
+
+				EditorGUILayout.Space();
+
+				EditorGUILayout.BeginHorizontal();
+				{
+					EditorGUILayout.LabelField("Type", GUILayout.Width(40));
+					int newSelectedTypeIndex =
+						EditorGUILayout.Popup(selectedTypeIndex, typeNames, GUILayout.Width(200));
+					if (newSelectedTypeIndex != selectedTypeIndex)
+					{
+						selectedTypeIndex = newSelectedTypeIndex;
+						LoadObjectsOfType(scriptableObjectTypes[selectedTypeIndex]);
+					}
+
+					bool newIncludeDerivedTypes =
+						EditorGUILayout.ToggleLeft("Include Derived", includeDerivedTypes, GUILayout.Width(120));
+					if (newIncludeDerivedTypes != includeDerivedTypes)
+					{
+						includeDerivedTypes = newIncludeDerivedTypes;
+						LoadObjectsOfType(scriptableObjectTypes[selectedTypeIndex]);
+					}
+
+					if (GUILayout.Button("Load Objects", GUILayout.Width(100)))
+					{
+						LoadObjectsOfType(scriptableObjectTypes[selectedTypeIndex]);
+					}
+				}
+				EditorGUILayout.EndHorizontal();
+
+				EditorGUILayout.Space();
+
+				if (currentTypeObjects.Any() && typeNames.Any())
+				{
+					EditorGUILayout.LabelField($"Editing {typeNames[selectedTypeIndex]} Instances",
+						EditorStyles.boldLabel);
+					EditorGUILayout.BeginVertical();
+					{
+						DrawPropertiesGrid();
+					}
+					EditorGUILayout.EndVertical();
+				}
+			}
+			EditorGUILayout.EndVertical();
 		}
-
-		if (GUILayout.Button("Refresh Assemblies", GUILayout.Width(150)))
-		{
-			LoadAvailableAssemblies();
-			LoadScriptableObjectTypes();
-			LoadObjectsOfType(scriptableObjectTypes.FirstOrDefault());
-		}
-
-		EditorGUILayout.EndHorizontal();
-
-		EditorGUILayout.Space();
-
-		EditorGUILayout.BeginHorizontal();
-		EditorGUILayout.LabelField("Type", GUILayout.Width(40));
-		int newSelectedTypeIndex = EditorGUILayout.Popup(selectedTypeIndex, typeNames, GUILayout.Width(200));
-		if (newSelectedTypeIndex != selectedTypeIndex)
-		{
-			selectedTypeIndex = newSelectedTypeIndex;
-			LoadObjectsOfType(scriptableObjectTypes[selectedTypeIndex]);
-		}
-
-		bool newIncludeDerivedTypes =
-			EditorGUILayout.ToggleLeft("Include Derived", includeDerivedTypes, GUILayout.Width(120));
-		if (newIncludeDerivedTypes != includeDerivedTypes)
-		{
-			includeDerivedTypes = newIncludeDerivedTypes;
-			LoadObjectsOfType(scriptableObjectTypes[selectedTypeIndex]);
-		}
-
-		if (GUILayout.Button("Load Objects", GUILayout.Width(100)))
-		{
-			LoadObjectsOfType(scriptableObjectTypes[selectedTypeIndex]);
-		}
-
-		EditorGUILayout.EndHorizontal();
-
-		EditorGUILayout.Space();
-		if (selectedTypeIndex > typeNames.Length)
-		{
-			selectedTypeIndex = 0;
-		}
-
-		if (currentTypeObjects.Any() && typeNames.Any())
-		{
-			EditorGUILayout.LabelField($"Editing {typeNames[selectedTypeIndex]} Instances", EditorStyles.boldLabel);
-			scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(300));
-
-			DrawPropertiesGrid();
-
-			EditorGUILayout.EndScrollView();
-		}
-
-		EditorGUILayout.EndVertical();
+		EditorGUILayout.EndScrollView();
 	}
 
 	private void DrawPropertiesGrid()
@@ -258,28 +255,21 @@ public class ScriptableObjectEditorWindow : EditorWindow
 			ScriptableObject obj = currentTypeObjects[i];
 			serializedObject = new SerializedObject(obj);
 			property = serializedObject.GetIterator();
-			try
+
+			EditorGUILayout.BeginHorizontal(i % 2 == 0 ? "box" : "helpBox");
+			EditorGUILayout.LabelField(obj.name, EditorStyles.textField, GUILayout.Width(150));
+
+			property.NextVisible(true);
+
+			int columnIndex = 0;
+			while (property.NextVisible(false))
 			{
-				EditorGUILayout.BeginHorizontal("box");
-				EditorGUILayout.LabelField(obj.name, EditorStyles.textField, GUILayout.Width(150));
-
-				property.NextVisible(true);
-
-				int columnIndex = 0;
-				while (property.NextVisible(false))
-				{
-					EditorGUILayout.PropertyField(property, GUIContent.none,
-						GUILayout.Width(columnWidths[columnIndex]));
-					columnIndex++;
-				}
-
-				serializedObject.ApplyModifiedProperties();
+				EditorGUILayout.PropertyField(property, GUIContent.none, GUILayout.Width(columnWidths[columnIndex]));
+				columnIndex++;
 			}
-			finally
-			{
-				EditorGUILayout.EndHorizontal();
-			}
-			
+
+			serializedObject.ApplyModifiedProperties();
+			EditorGUILayout.EndHorizontal();
 		}
 	}
 }
