@@ -10,14 +10,14 @@ public class ScriptableObjectEditorWindow : EditorWindow
 	private Vector2 scrollPosition;
 	public List<Type> scriptableObjectTypes;
 	private string[] typeNames;
-	public int selectedTypeIndex ;
+	public int selectedTypeIndex;
 
 	private List<ScriptableObject> currentTypeObjects = new();
-	private string assetsFolderPath = "Assets/ScriptableObjects";
+	private static string assetsFolderPath = "Assets/ScriptableObjects";
 
 	private List<Assembly> availableAssemblies;
 	private string[] assemblyNames;
-	private int selectedAssemblyIndex ;
+	private int selectedAssemblyIndex;
 
 	private bool includeDerivedTypes = true;
 	private DateTime lastAssemblyCheckTime = DateTime.Now;
@@ -65,19 +65,31 @@ public class ScriptableObjectEditorWindow : EditorWindow
 	{
 		availableAssemblies = GetAssembliesWithScriptableObjects();
 
-		assemblyNames = availableAssemblies.Select(assembly => assembly.GetName().Name).Prepend("All Assemblies")
+		assemblyNames = availableAssemblies
+			.Select(assembly => assembly.GetName().Name)
+			.Prepend("All Assemblies")
 			.ToArray();
 	}
 
 	private static List<Assembly> GetAssembliesWithScriptableObjects()
 	{
 		return AppDomain.CurrentDomain.GetAssemblies()
-			.Where(assembly => !assembly.FullName.StartsWith("UnityEngine") &&
-			                   !assembly.FullName.StartsWith("UnityEditor") && !assembly.FullName.StartsWith("Unity."))
 			.Where(assembly =>
-				assembly.GetTypes().Any(type => type.IsSubclassOf(typeof(ScriptableObject)) && !type.IsAbstract))
+				!assembly.FullName.StartsWith("UnityEngine") &&
+				!assembly.FullName.StartsWith("UnityEditor") &&
+				!assembly.FullName.StartsWith("Unity."))
+			.Where(assembly =>
+				assembly.GetTypes().Any(type => type.IsSubclassOf(typeof(ScriptableObject)) && !type.IsAbstract && IsInAssetsFolder(type)))
+			.Where(assembly => IsUserAssembly(assembly))
 			.OrderBy(assembly => assembly.GetName().Name)
 			.ToList();
+	}
+
+	private static bool IsUserAssembly(Assembly assembly)
+	{
+		// Filter by project path or specific naming convention for user assemblies
+		var a = assembly;
+		return true;
 	}
 
 	private void LoadScriptableObjectTypes()
@@ -101,7 +113,7 @@ public class ScriptableObjectEditorWindow : EditorWindow
 		typeNames = scriptableObjectTypes.Select(type => type.Name).ToArray();
 	}
 
-	private bool IsInAssetsFolder(Type type)
+	private static bool IsInAssetsFolder(Type type)
 	{
 		string[] guids = AssetDatabase.FindAssets($"t:{type.Name}", new[] {assetsFolderPath});
 		return guids.Any();
@@ -145,6 +157,7 @@ public class ScriptableObjectEditorWindow : EditorWindow
 
 	private void OnGUI()
 	{
+		scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Width(position.width), GUILayout.Height(position.height));
 		EditorGUILayout.BeginVertical("box");
 
 		EditorGUILayout.LabelField("Asset Management", EditorStyles.boldLabel);
@@ -199,8 +212,12 @@ public class ScriptableObjectEditorWindow : EditorWindow
 		EditorGUILayout.EndHorizontal();
 
 		EditorGUILayout.Space();
+		if (selectedTypeIndex > typeNames.Length)
+		{
+			selectedTypeIndex = 0;
+		}
 
-		if (currentTypeObjects.Count > 0)
+		if (currentTypeObjects.Any() && typeNames.Any())
 		{
 			EditorGUILayout.LabelField($"Editing {typeNames[selectedTypeIndex]} Instances", EditorStyles.boldLabel);
 			scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(300));
@@ -236,25 +253,33 @@ public class ScriptableObjectEditorWindow : EditorWindow
 
 		EditorGUILayout.EndHorizontal();
 
-		foreach (ScriptableObject obj in currentTypeObjects)
+		for (int i = 0; i < currentTypeObjects.Count; i++)
 		{
+			ScriptableObject obj = currentTypeObjects[i];
 			serializedObject = new SerializedObject(obj);
 			property = serializedObject.GetIterator();
-
-			EditorGUILayout.BeginHorizontal("box");
-			EditorGUILayout.LabelField(obj.name, EditorStyles.textField, GUILayout.Width(150));
-
-			property.NextVisible(true);
-
-			int columnIndex = 0;
-			while (property.NextVisible(false))
+			try
 			{
-				EditorGUILayout.PropertyField(property, GUIContent.none, GUILayout.Width(columnWidths[columnIndex]));
-				columnIndex++;
-			}
+				EditorGUILayout.BeginHorizontal("box");
+				EditorGUILayout.LabelField(obj.name, EditorStyles.textField, GUILayout.Width(150));
 
-			serializedObject.ApplyModifiedProperties();
-			EditorGUILayout.EndHorizontal();
+				property.NextVisible(true);
+
+				int columnIndex = 0;
+				while (property.NextVisible(false))
+				{
+					EditorGUILayout.PropertyField(property, GUIContent.none,
+						GUILayout.Width(columnWidths[columnIndex]));
+					columnIndex++;
+				}
+
+				serializedObject.ApplyModifiedProperties();
+			}
+			finally
+			{
+				EditorGUILayout.EndHorizontal();
+			}
+			
 		}
 	}
 }
